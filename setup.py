@@ -9,11 +9,10 @@ setup(
     author_email='matt@sendwithus.com',
     packages=find_packages(),
     scripts=[],
-    url='https://github.com/sendwithus/pyrelate',
+    url='https://github.com/mrmch/pyrelate',
     license='LICENSE.txt',
     description='Python API client for relateiq',
     long_description=open('README.md').read(),
-    test_suite="relate.test",
     install_requires=[
         "requests >= 1.1.0"
     ]

@@ -1,5 +1,4 @@
-from distutils.=jedi#complete_opened()
-ore import setup
+from distutils.core import setup
 from setuptools import find_packages
 
 setup(

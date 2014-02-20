@@ -9,18 +9,21 @@ import requests
 class RelateAPI:
     API_PROTO = 'https'
     API_PORT = '443'
-    API_HOST = 'api.relateiq.com'
+    API_HOST = 'app.relateiq.com'
     API_VERSION = 'v1'
 
     HTTP_POST = 'post'
     HTTP_GET = 'get'
 
-    def __init__(self, api_token, list_id=None):
+    DEBUG = False
+
+    def __init__(self, api_token, list_id=None, debug=False):
         self.API_TOKEN = api_token
         self.LIST_ID = list_id
+        self.DEBUG = debug
 
     def _build_request_path(self, endpoint):
-        path = "%s://%s/api/v%s/%s" % (
+        path = "%s://%s/api/%s/%s" % (
             self.API_PROTO,
             self.API_HOST,
             self.API_VERSION,
@@ -57,13 +60,17 @@ class RelateAPI:
         return self._api_request(self.HTTP_POST, 'addrelationship',
                 list_id=list_id, data=data)
 
+    def search_relationship(self, name, list_id=None):
+        """searches for a relationship in the given list, by name"""
+
+        if not name:
+            raise Exception("name is required")
+
+        return self._api_request(self.HTTP_GET, 'search', list_id=list_id, 
+                data={'name': name})
+
     def _api_request(self, http_method, endpoint, list_id=None, data=None):
         """Private method for api requests"""
-
-        headers = {
-            'Content-type': 'application/json',
-            'Accept': 'text/plain'
-        }
 
         if not list_id:
             list_id = self.LIST_ID
@@ -75,8 +82,18 @@ class RelateAPI:
 
         path = '%s/%s/%s' % (path, list_id, endpoint)
 
+        if self.DEBUG:
+            print '%s\n' % path
+            print 'data:\n%s\n' % data
+
+        r = None
+
         if (http_method == self.HTTP_POST):
-            r = requests.post(path, data=data, headers=headers,
+            r = requests.post(path, data=data,
+                auth=('apitoken', self.API_TOKEN))
+        elif (http_method == self.HTTP_GET):
+            r = requests.get(path, params=data,
                 auth=('apitoken', self.API_TOKEN))
 
+        return r
 

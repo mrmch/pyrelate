@@ -6,10 +6,13 @@ VERY EXPERIMENTAL
 
 import requests
 
+import settings
+
+
 class RelateObject:
     API_PROTO = 'https'
     API_PORT = '443'
-    API_HOST = 'app.relateiq.com'
+    API_HOST = 'api.relateiq.com'
     API_VERSION = 'v2'
 
     API_STATUS_CODES = {
@@ -32,61 +35,55 @@ class RelateObject:
 
     DEBUG = False
 
-    def __init__(self, api_key=None, api_secret=None, list_id=None, debug=False):
-        self.API_KEY = api_key or RELATE_API_KEY
-        self.API_SECRET = api_secret or RELATE_API_SECRET
+    def __init__(self, api_key=None, api_secret=None, list_id=None, debug=True):
+        self.API_KEY = api_key or settings.RELATE_API_KEY
+        self.API_SECRET = api_secret or settings.RELATE_API_SECRET
+
         self.LIST_ID = list_id
         self.DEBUG = debug
 
     def _build_request_path(self, endpoint):
-        path = "%s://%s/api/%s/%s" % (
+        path = "%s://%s/%s/%s" % (
             self.API_PROTO,
             self.API_HOST,
             self.API_VERSION,
             endpoint)
         return path
 
-    def add_relationship(self, data, list_id=None):
-        """
-        This is an api v1 method that has been deprecated
-        
-        Add a relationship to the given list
-        data format:
-        {
-            'firstName': "Matt",
-            'email': "matt@sendwithus.com",
-            'phone': '123-456-7890',
-            'Status': 'New',
-            'source': 'Landing'
-        }
+    @classmethod
+    def get_all(cls, start=0, limit=None, transform=True):
+        """Gets all the objects of this type
+        optionally transforms as well"""
+        if not limit:
+            limit = cls.DEFAULT_LIMIT
 
-        expected response:
-        {
-            result: ["Created a contact", "Added a member"]
-            success: true
-        }
-        """
+        obj = cls()
+        data = obj.get("%s?_start=%d&_limit=%d" % (
+            cls.ENDPOINT, start, limit))
 
-        if not data:
-            data = {}
+        result = data['objects']
 
-        if not 'firstName' in data:
-            raise Exception('firstName is a required parameter')
+        if transform:
+            result = []
 
-        if not 'email' in data:
-            raise Exception('Email must be set')
+            for item in data['objects']:
+                result.append(cls.from_dict(item))
 
-        return self._api_request(self.HTTP_POST, 'addrelationship',
-                list_id=list_id, data=data)
+        return result
 
-    def search_relationship(self, name, list_id=None):
-        """searches for a relationship in the given list, by name"""
+    @classmethod
+    def get_by_id(cls, object_id):
+        obj = cls()
+        endpoint = '%s/%s' % (cls.ENDPOINT, object_id)
+        data = obj.get(endpoint)
+        obj.update_from_dict(data)
+        return obj
 
-        if not name:
-            raise Exception("name is required")
-
-        return self._api_request(self.HTTP_GET, 'search', list_id=list_id,
-                data={'name': name})
+    @classmethod
+    def from_dict(cls, data):
+        obj = cls()
+        obj.update_from_dict(data)
+        return obj
 
     def post(self, endpoint, data):
         return self._api_request(self.HTTP_POST, endpoint, data=data)
@@ -112,28 +109,39 @@ class RelateObject:
         }
 
         r = None
+        auth = requests.auth.HTTPBasicAuth(self.API_KEY, self.API_SECRET)
 
         if (http_method == self.HTTP_POST):
-            r = requests.post(path, data=data,
-                auth=(self.API_KEY, self.API_SECRET),
-                headers=headers)
+            r = requests.post(path, data=data, auth=auth, headers=headers)
         elif (http_method == self.HTTP_PUT):
-            r = requests.put(path, data=data,
-                auth=(self.API_KEY, self.API_SECRET),
-                headers=headers)
+            r = requests.put(path, data=data, auth=auth, headers=headers)
         elif (http_method == self.HTTP_GET):
-            r = requests.get(path, params=data,
-                auth=(self.API_KEY, self.API_SECRET),
-                headers=headers)
+            r = requests.get(path, params=data, auth=auth, headers=headers)
 
         if r.status_code not in [200, 204]:
+            extra = ""
+
             if r.status_code not in self.API_STATUS_CODES:
                 msg = "UNKNOWN STATUS CODE"
             else:
                 msg = self.API_STATUS_CODES[r.status_code]
 
-            raise Exception('Request failed: %s\n%s\n\n%s' % (r.status_code,
-                msg, r.text))
+                if self.DEBUG:
+                    extra = "RELATE_API_KEY: %s\nRELATE_API_SECRET: %s" % (
+                        self.API_KEY, self.API_SECRET
+                    )
+
+            raise Exception("""
+                Request failed: %s
+                Path: %s
+                Method: %s
+                Response Msg: %s
+                Extra:
+                %s
+                
+                Response Body
+                %s""" % (r.status_code, path, http_method, msg, extra,
+                            r.text))
 
         return r.json()
 
@@ -154,33 +162,74 @@ class RelateContact(RelateObject):
     company = None
     title = None
 
-    @classmethod
-    def get_all(cls):
-        data = cls.get(cls.ENDPOINT)
-        return data['objects']
+    def update_from_dict(self, data):
+        self.id = data['id']
+        self.modified_date = data['modifiedDate']
 
-    @classmethod
-    def get_by_id(cls, contact_id):
-        endpoint = '%s/%s' % (cls.ENDPOINT, contact_id)
-        data = cls.get(endpoint, contact_id)
-        account = cls.from_dict(data)
-        return account
+        self.properties = []
 
-    @classmethod
-    def from_dict(cls, data):
-        contact = cls()
-        contact.update_from_dict(data)
-        return contact
+        for prop, val in data['properties'].items():
+            if hasattr(self, prop):
+                self.properties.append(prop)
+                setattr(self, prop, val[0]['value'])
+
+    def to_dict(self):
+        data = {
+            'id': self.id,
+            'modifiedDate': self.modified_date,
+            'properties': {
+                'name': [{'value': self.name}],
+                'email': [{'value': self.email}],
+                'phone': [{'value': self.phone}],
+                'address': [{'value': self.address}],
+                'company': [{'value': self.company}],
+                'title': [{'value': self.title}]
+            }
+        }
+
+        return data
+
+    def save(self):
+        if self.id and self.modified_date:
+            # update
+            endpoint = '%s/%s' % (self.ENDPOINT, self.id)
+            data = self.put(endpoint, self.to_dict())
+            self.update_from_dict(data)
+        else:
+            #create
+            endpoint = self.ENDPOINT
+            data = self.post(endpoint, self.to_dict())
+            self.update_from_dict(data)
+
+        return data
+
+
+class RelateUser(RelateObject):
+    ENDPOINT = 'users'
+
+    id = None
+    modified_date = None
+    properties = None
+
+    # current supported contact properties
+    # ----
+    name = None
+    email = None
+    phone = None
+    address = None
+    company = None
+    title = None
 
     def update_from_dict(self, data):
         self.id = data['id']
         self.modified_date = data['modifiedDate']
-        self.name = data['properties']['name'][0]['value']
-        self.email = data['properties']['email'][0]['value']
-        self.phone = data['properties']['phone'][0]['value']
-        self.address = data['properties']['address'][0]['value']
-        self.company = data['properties']['company'][0]['value']
-        self.title = data['properties']['title'][0]['value']
+
+        self.properties = []
+
+        for prop, val in data['properties'].items():
+            if hasattr(self, prop):
+                self.properties.append(prop)
+                setattr(self, prop, val[0]['value'])
 
     def to_dict(self):
         data = {
@@ -219,24 +268,6 @@ class RelateAccount(RelateObject):
     id = None
     modified_date = None
     name = None
-
-    @classmethod
-    def get_all(cls):
-        data = cls.get(cls.ENDPOINT)
-        return data['objects']
-
-    @classmethod
-    def get_by_id(cls, account_id):
-        endpoint = '%s/%s' % (cls.ENDPOINT, account_id)
-        data = cls.get(endpoint)
-        account = cls.from_dict(data)
-        return account
-
-    @classmethod
-    def from_dict(cls, data):
-        account = cls()
-        account.update_from_dict(data)
-        return account
 
     def update_from_dict(self, data):
         self.id = data['id']
@@ -281,25 +312,14 @@ class RelateList(RelateObject):
 
     @classmethod
     def get_by_id(cls, list_id, get_items=False):
-        data = cls.get('%s/%s' % (cls.ENDPOINT, list_id))
-        r_list = cls.from_dict(data)
+        obj = cls()
+        data = obj.get('%s/%s' % (cls.ENDPOINT, list_id))
+        obj.update_from_dict(data)
 
         if get_items:
-            r_list.get_items()
+            obj.get_items()
 
-        return r_list
-
-    @classmethod
-    def from_dict(cls, data):
-        r_list = cls()
-        r_list.update_from_dict(data)
-        return r_list
-
-    @classmethod
-    def get_all(cls):
-        """Gets all lists"""
-        data = cls.get(cls.ENDPOINT)
-        return data['objects']
+        return obj
 
     def update_from_dict(self, data):
         self.id = data['id']
@@ -322,9 +342,9 @@ class RelateList(RelateObject):
 
         response = self.get(endpoint, data=data)
 
-        self.items = [RelateListItem(self, item) for item in response['objects']]
+        self.items += [RelateListItem(self, item) for item in response['objects']]
 
-        return self.items
+        return response['objects']
 
     def filter_items(self, field, value, include=True):
         """Returns a filtered set of items. include defaults to true,
@@ -360,12 +380,13 @@ class RelateListItem(RelateObject):
     name = None
 
     field_values = {}
-    field_dict = {}
+    fields_dict = {}
     fields = {}
 
     def __init__(self, r_list, data=None):
         self.list_id = r_list.id
         self.fields_dict = r_list.fields_dict
+        self.fields_dict_reversed = {v: k for k, v in r_list.fields_dict.items()}
 
         if data:
             self.update_from_dict(data)
@@ -376,11 +397,15 @@ class RelateListItem(RelateObject):
         data = cls.get(endpoint)
         return cls.from_dict(data)
 
-    @classmethod
-    def from_dict(cls, data):
-        item = cls()
-        item.update_from_dict(data)
-        return item
+    def get_field(self, name):
+        if name in self.fields_dict_reversed:
+            return self.fields[self.fields_dict_reversed[name]]
+        raise Exception('Invalid field for list: %s' % name)
+
+    def set_field(self, name, val):
+        if name in self.fields_dict_reversed:
+            self.fields[self.fields_dict_reversed[name]] = val
+        raise Exception('Invalid field for list: %s' % name)
 
     def update_from_dict(self, data):
         self.id = data['id']
@@ -394,13 +419,16 @@ class RelateListItem(RelateObject):
 
         self.fields = {}
 
-        for key, value in self.field_dict.iteritems():
-            self.fields[value] = self.field_values[key][0]['raw']
+        for key, value in self.fields_dict.iteritems():
+            if key in self.field_values:
+                self.fields[key] = self.field_values[key][0]['raw']
+            else:
+                self.fields[key] = ''
 
     def to_dict(self):
         fieldValues = {}
 
-        for key, value in self.field_dict.iteritems():
+        for key, value in self.fields_dict.iteritems():
             fieldValues[key] = [{"raw": self.fields[value]}]
 
         data = {

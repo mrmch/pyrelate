@@ -34,4 +34,4 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
->>>>>>> 3f6177ead35301799378deec771a51b3516d4b37
+working_test.py

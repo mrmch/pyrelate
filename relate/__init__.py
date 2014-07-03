@@ -403,6 +403,7 @@ class RelateListItem(RelateObject):
     fields_data = {}
     field_values = {}
     fields_dict = {}
+    fields_dict_reversed = {}
     fields = {}
 
     def __init__(self, r_list, data=None):

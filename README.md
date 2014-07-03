@@ -1,8 +1,4 @@
-very basic python wrapper for relateiq.com
-
-Based on API here: https://github.com/relateiq/riqapi/blob/master/resources/entitylists.md
-
-Should note that as the relateiq API is alpha, this package could break at any time
+Basic API client for: https://api.relateiq.com/#/
 
 ## Usage:
 
@@ -83,7 +79,7 @@ obj.save()
 lists = RelatList.all()
 
 # get a list by id
-my_list = RelateList.get_by_id('my--list-id')
+my_list = RelateList.get_by_id('my-list-id')
 
 # optionally, retreive all list items at the same time
 my_list_with_items = RelateList.get_by_id('my-list-id', get_items=True)
@@ -107,7 +103,8 @@ type item
 
 # Assume we have a field called "value"
 # we can now do
-print item.get_field('value')
+print item.get_field('Status')
+# u'Interested'
 
 # You can also get the raw value of a field
 print item.get_field('value', raw=True)

@@ -51,25 +51,36 @@ class RelateObject:
         return path
 
     @classmethod
-    def get_all(cls, start=0, limit=None, transform=True):
+    def all(cls, start=0, limit=None, fetch_all=False, transform=True):
         """Gets all the objects of this type
         optionally transforms as well"""
+
         if not limit:
             limit = cls.DEFAULT_LIMIT
 
         obj = cls()
-        data = obj.get("%s?_start=%d&_limit=%d" % (
-            cls.ENDPOINT, start, limit))
 
-        result = data['objects']
+        results = []
 
-        if transform:
-            result = []
+        while True:
+            data = {'_start': start, '_limit': limit}
 
-            for item in data['objects']:
-                result.append(cls.from_dict(item))
+            response = obj.get(cls.ENDPOINT, data=data)
 
-        return result
+            if len(response['objects']) == 0:
+                break
+
+            if transform:
+                results += [cls.from_dict(item) for item in response['objects']]
+            else:
+                results += response['objects']
+
+            start += limit
+
+            if not fetch_all:
+                break
+
+        return results
 
     @classmethod
     def get_by_id(cls, object_id):
@@ -327,24 +338,34 @@ class RelateList(RelateObject):
         self.list_type = data['listType']
         self.fields = data['fields']
 
-        self.fields_dict = {}
-
-        for field in self.fields:
-            self.fields_dict[field['id']] = field['name']
+        self.fields_dict = {field['id']: field for field in self.fields}
 
         self.raw_data = data
 
-    def get_items(self, start=0, limit=20):
+    def get_items(self, start=1, limit=20, fetch_all=False, clear_items=False):
         """Get all items in this list"""
 
-        data = {'_start': start, '_limit': limit}
         endpoint = '%s/%s/listitems' % (self.ENDPOINT, self.id)
 
-        response = self.get(endpoint, data=data)
+        if clear_items:
+            self.items = []
 
-        self.items += [RelateListItem(self, item) for item in response['objects']]
+        while True:
+            data = {'_start': start, '_limit': limit}
 
-        return response['objects']
+            response = self.get(endpoint, data=data)
+
+            if len(response['objects']) == 0:
+                break
+
+            self.items += [RelateListItem(self, item) for item in response['objects']]
+
+            start += limit
+
+            if not fetch_all:
+                break
+
+        return self.items
 
     def filter_items(self, field, value, include=True):
         """Returns a filtered set of items. include defaults to true,
@@ -379,6 +400,7 @@ class RelateListItem(RelateObject):
     contact_ids = []
     name = None
 
+    fields_data = {}
     field_values = {}
     fields_dict = {}
     fields = {}
@@ -386,7 +408,8 @@ class RelateListItem(RelateObject):
     def __init__(self, r_list, data=None):
         self.list_id = r_list.id
         self.fields_dict = r_list.fields_dict
-        self.fields_dict_reversed = {v: k for k, v in r_list.fields_dict.items()}
+        self.fields_dict_reversed = {v['name']: k for k, v in r_list.fields_dict.items()}
+        self.fields_data = r_list.fields
 
         if data:
             self.update_from_dict(data)
@@ -397,9 +420,31 @@ class RelateListItem(RelateObject):
         data = cls.get(endpoint)
         return cls.from_dict(data)
 
-    def get_field(self, name):
+    def get_field(self, name, raw=False):
         if name in self.fields_dict_reversed:
-            return self.fields[self.fields_dict_reversed[name]]
+            if raw:
+                return self.fields[self.fields_dict_reversed[name]]
+            else:
+                field_key = self.fields_dict_reversed[name]
+                raw_val = self.fields[field_key]
+                field = self.fields_dict[field_key]
+
+                if field['dataType'] == 'Text':
+                    return raw_val
+                elif field['dataType'] == 'User':
+                    return RelateUser.get_by_id(raw_val)
+                elif field['dataType'] == 'DateTime':
+                    # @TODO: impl parse library to create dt object
+                    return raw_val
+                elif field['dataType'] == 'Numeric':
+                    return raw_val
+                elif field['dataType'] == 'List':
+                    for item in field['listOptions']:
+                        if item['id'] == raw_val:
+                            return item['display']
+                else:
+                    raise Exception('Unknown data type: %s' % field)
+
         raise Exception('Invalid field for list: %s' % name)
 
     def set_field(self, name, val):

@@ -322,13 +322,13 @@ class RelateList(RelateObject):
     raw_data = None
 
     @classmethod
-    def get_by_id(cls, list_id, get_items=False):
+    def get_by_id(cls, list_id, get_items=False, fetch_all=False):
         obj = cls()
         data = obj.get('%s/%s' % (cls.ENDPOINT, list_id))
         obj.update_from_dict(data)
 
         if get_items:
-            obj.get_items()
+            obj.get_items(fetch_all=fetch_all)
 
         return obj
 

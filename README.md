@@ -107,7 +107,8 @@ print item.get_field('Status')
 # u'Interested'
 
 # You can also get the raw value of a field
-print item.get_field('value', raw=True)
+print item.get_field('Status', raw=True)
+# u'9'
 
 # set a field
 item.set_field('value', 100)

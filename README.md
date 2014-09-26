@@ -42,6 +42,9 @@ Gets a single item of that type by id
 
 ```python
 RelateList.get_by_id('my-list-id')
+RelateAccount.get_by_id('my-list-id')
+RelateContact.get_by_id('my-list-id')
+RelateUser.get_by_id('my-list-id')
 ```
 
 #### all

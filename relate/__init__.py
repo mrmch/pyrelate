@@ -512,6 +512,7 @@ class RelateListItem(RelateObject):
 
 
 class RelateEvent(RelateObject):
+    # @TODO: RelateEvent is not completed
     PARTICIPANT_TYPES = ["email", "phone"]
     ENDPOINT = 'events'
 

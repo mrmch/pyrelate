@@ -10,7 +10,7 @@ import requests
 import settings
 
 
-class RelateObject:
+class RelateObject(object):
     API_PROTO = 'https'
     API_PORT = '443'
     API_HOST = 'api.relateiq.com'
@@ -391,7 +391,7 @@ class RelateList(RelateObject):
 
 
 class RelateListItem(RelateObject):
-    ENDPOINT = RelateList.ENDPOINT + '/%s/listitems/%s'
+    ENDPOINT = RelateList.ENDPOINT + '/%s/listitems'
 
     id = None
     modified_date = None
@@ -407,20 +407,27 @@ class RelateListItem(RelateObject):
     fields_dict_reversed = {}
     fields = {}
 
-    def __init__(self, r_list, data=None):
-        self.list_id = r_list.id
-        self.fields_dict = r_list.fields_dict
-        self.fields_dict_reversed = {v['name']: k for k, v in r_list.fields_dict.items()}
-        self.fields_data = r_list.fields
+    def __init__(self, r_list=None, list_id=None, data=None, **kwargs):
+        super(RelateListItem, self).__init__(**kwargs)
+        if r_list:
+            self.list_id = r_list.id
+            self.fields_dict = r_list.fields_dict
+            self.fields_dict_reversed = {v['name']: k for k, v in r_list.fields_dict.items()}
+            self.fields_data = r_list.fields
+        else:
+            self.list_id = list_id
 
         if data:
             self.update_from_dict(data)
 
     @classmethod
     def get_by_id(cls, list_id, item_id):
-        endpoint = cls.ENDPOINT % (list_id, item_id)
-        data = cls.get(endpoint)
-        return cls.from_dict(data)
+        obj = cls(list_id=list_id)
+        endpoint = (cls.ENDPOINT % list_id) + ('/%s' % item_id)
+        data = obj.get(endpoint)
+        obj.update_from_dict(data)
+
+        return obj
 
     def get_field(self, name, raw=False):
         if name in self.fields_dict_reversed:
@@ -499,14 +506,14 @@ class RelateListItem(RelateObject):
         return data
 
     def save(self):
+        endpoint = self.ENDPOINT % (self.list_id)
         if self.id:
             # update
-            endpoint = self.ENDPOINT % (self.list_id, self.id)
+            endpoint += '/%s' % self.id
             data = self.put(endpoint, self.to_dict())
             self.update_from_dict(data)
         else:
             #create
-            endpoint = self.ENDPOINT
             data = self.post(endpoint, self.to_dict())
             self.update_from_dict(data)
 

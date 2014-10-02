@@ -36,11 +36,10 @@ class RelateObject:
 
     DEBUG = False
 
-    def __init__(self, api_key=None, api_secret=None, list_id=None, debug=True):
+    def __init__(self, api_key=None, api_secret=None, debug=True):
         self.API_KEY = api_key or settings.RELATE_API_KEY
         self.API_SECRET = api_secret or settings.RELATE_API_SECRET
 
-        self.LIST_ID = list_id
         self.DEBUG = debug
 
     def _build_request_path(self, endpoint):

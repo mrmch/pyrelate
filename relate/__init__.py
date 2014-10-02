@@ -4,6 +4,7 @@ Python client for relate IQ
 VERY EXPERIMENTAL
 """
 
+import json
 import requests
 
 import settings
@@ -123,9 +124,9 @@ class RelateObject:
         auth = requests.auth.HTTPBasicAuth(self.API_KEY, self.API_SECRET)
 
         if (http_method == self.HTTP_POST):
-            r = requests.post(path, data=data, auth=auth, headers=headers)
+            r = requests.post(path, data=json.dumps(data), auth=auth, headers=headers)
         elif (http_method == self.HTTP_PUT):
-            r = requests.put(path, data=data, auth=auth, headers=headers)
+            r = requests.put(path, data=json.dumps(data), auth=auth, headers=headers)
         elif (http_method == self.HTTP_GET):
             r = requests.get(path, params=data, auth=auth, headers=headers)
 

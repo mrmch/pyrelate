@@ -337,6 +337,7 @@ class RelateList(RelateObject):
         self.modified_date = data['modifiedDate']
         self.list_type = data['listType']
         self.fields = data['fields']
+        self.title = data['title']
 
         self.fields_dict = {field['id']: field for field in self.fields}
 

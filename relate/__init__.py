@@ -4,12 +4,13 @@ Python client for relate IQ
 VERY EXPERIMENTAL
 """
 
+import json
 import requests
 
 import settings
 
 
-class RelateObject:
+class RelateObject(object):
     API_PROTO = 'https'
     API_PORT = '443'
     API_HOST = 'api.relateiq.com'
@@ -35,11 +36,10 @@ class RelateObject:
 
     DEBUG = False
 
-    def __init__(self, api_key=None, api_secret=None, list_id=None, debug=True):
+    def __init__(self, api_key=None, api_secret=None, debug=True):
         self.API_KEY = api_key or settings.RELATE_API_KEY
         self.API_SECRET = api_secret or settings.RELATE_API_SECRET
 
-        self.LIST_ID = list_id
         self.DEBUG = debug
 
     def _build_request_path(self, endpoint):
@@ -123,9 +123,9 @@ class RelateObject:
         auth = requests.auth.HTTPBasicAuth(self.API_KEY, self.API_SECRET)
 
         if (http_method == self.HTTP_POST):
-            r = requests.post(path, data=data, auth=auth, headers=headers)
+            r = requests.post(path, data=json.dumps(data), auth=auth, headers=headers)
         elif (http_method == self.HTTP_PUT):
-            r = requests.put(path, data=data, auth=auth, headers=headers)
+            r = requests.put(path, data=json.dumps(data), auth=auth, headers=headers)
         elif (http_method == self.HTTP_GET):
             r = requests.get(path, params=data, auth=auth, headers=headers)
 
@@ -337,6 +337,7 @@ class RelateList(RelateObject):
         self.modified_date = data['modifiedDate']
         self.list_type = data['listType']
         self.fields = data['fields']
+        self.title = data['title']
 
         self.fields_dict = {field['id']: field for field in self.fields}
 
@@ -390,7 +391,7 @@ class RelateList(RelateObject):
 
 
 class RelateListItem(RelateObject):
-    ENDPOINT = RelateList.ENDPOINT + '/%s/listitems/%s'
+    ENDPOINT = RelateList.ENDPOINT + '/%s/listitems'
 
     id = None
     modified_date = None
@@ -406,20 +407,27 @@ class RelateListItem(RelateObject):
     fields_dict_reversed = {}
     fields = {}
 
-    def __init__(self, r_list, data=None):
-        self.list_id = r_list.id
-        self.fields_dict = r_list.fields_dict
-        self.fields_dict_reversed = {v['name']: k for k, v in r_list.fields_dict.items()}
-        self.fields_data = r_list.fields
+    def __init__(self, r_list=None, list_id=None, data=None, **kwargs):
+        super(RelateListItem, self).__init__(**kwargs)
+        if r_list:
+            self.list_id = r_list.id
+            self.fields_dict = r_list.fields_dict
+            self.fields_dict_reversed = {v['name']: k for k, v in r_list.fields_dict.items()}
+            self.fields_data = r_list.fields
+        else:
+            self.list_id = list_id
 
         if data:
             self.update_from_dict(data)
 
     @classmethod
     def get_by_id(cls, list_id, item_id):
-        endpoint = cls.ENDPOINT % (list_id, item_id)
-        data = cls.get(endpoint)
-        return cls.from_dict(data)
+        obj = cls(list_id=list_id)
+        endpoint = (cls.ENDPOINT % list_id) + ('/%s' % item_id)
+        data = obj.get(endpoint)
+        obj.update_from_dict(data)
+
+        return obj
 
     def get_field(self, name, raw=False):
         if name in self.fields_dict_reversed:
@@ -451,7 +459,8 @@ class RelateListItem(RelateObject):
     def set_field(self, name, val):
         if name in self.fields_dict_reversed:
             self.fields[self.fields_dict_reversed[name]] = val
-        raise Exception('Invalid field for list: %s' % name)
+        else:
+            raise Exception('Invalid field for list: %s' % name)
 
     def update_from_dict(self, data):
         self.id = data['id']
@@ -474,8 +483,8 @@ class RelateListItem(RelateObject):
     def to_dict(self):
         fieldValues = {}
 
-        for key, value in self.fields_dict.iteritems():
-            fieldValues[key] = [{"raw": self.fields[value]}]
+        for key in self.fields:
+            fieldValues[key] = [{"raw": self.fields[key]}]
 
         data = {
             "listId": self.list_id,
@@ -497,14 +506,14 @@ class RelateListItem(RelateObject):
         return data
 
     def save(self):
+        endpoint = self.ENDPOINT % (self.list_id)
         if self.id:
             # update
-            endpoint = self.ENDPOINT % (self.list_id, self.id)
+            endpoint += '/%s' % self.id
             data = self.put(endpoint, self.to_dict())
             self.update_from_dict(data)
         else:
             #create
-            endpoint = self.ENDPOINT
             data = self.post(endpoint, self.to_dict())
             self.update_from_dict(data)
 
